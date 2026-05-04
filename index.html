@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Defesa Civil - Rio do Sul</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    body { margin:0; font-family: Arial; background:#f5f5f5; }
+
+    .header {
+      background:#2f1a6b;
+      text-align:center;
+      padding:10px;
+    }
+
+    .header img {
+      max-height:120px;
+      width:auto;
+    }
+
+    .titulo {
+      background:#e57200;
+      color:white;
+      text-align:center;
+      padding:10px;
+      font-weight:bold;
+    }
+
+    #map { height:60vh; }
+
+    form {
+      padding:15px;
+      background:white;
+    }
+
+    input, select, textarea, button {
+      width:100%;
+      margin:5px 0;
+      padding:10px;
+    }
+
+    button {
+      background:#2f1a6b;
+      color:white;
+      border:none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <img src="img/logo.png">
+</div>
+
+<div class="titulo">
+  Sistema de Registro de Ocorrências
+</div>
+
+<div id="map"></div>
+
+<form id="form">
+  <select id="tipo">
+    <option>Alagamento</option>
+    <option>Deslizamento</option>
+    <option>Queda de árvore</option>
+  </select>
+
+  <textarea id="descricao" placeholder="Descrição"></textarea>
+
+  <button type="submit">Registrar</button>
+</form>
+
+<script>
+  const map = L.map('map').setView([-27.21, -49.64], 13);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+  let marker;
+  let geojsonData;
+
+  // carregar geojson
+  fetch('ocorrencias.geojson')
+    .then(res => res.json())
+    .then(data => {
+      geojsonData = data;
+
+      L.geoJSON(data, {
+        onEachFeature: (f, l) => {
+          l.bindPopup(`<b>${f.properties.tipo}</b><br>${f.properties.descricao}`);
+        }
+      }).addTo(map);
+    });
+
+  map.on('click', e => {
+    if (marker) map.removeLayer(marker);
+    marker = L.marker(e.latlng).addTo(map);
+
+    window.lat = e.latlng.lat;
+    window.lng = e.latlng.lng;
+  });
+
+  document.getElementById('form').addEventListener('submit', e => {
+    e.preventDefault();
+
+    if (!window.lat) {
+      alert("Clique no mapa!");
+      return;
+    }
+
+    const tipo = document.getElementById('tipo').value;
+    const descricao = document.getElementById('descricao').value;
+
+    const novaFeature = {
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [window.lng, window.lat]
+      },
+      properties: {
+        tipo: tipo,
+        descricao: descricao
+      }
+    };
+
+    geojsonData.features.push(novaFeature);
+
+    downloadGeoJSON(geojsonData);
+  });
+
+  function downloadGeoJSON(data) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ocorrencias.geojson";
+    a.click();
+  }
+</script>
+
+</body>
+</html>
