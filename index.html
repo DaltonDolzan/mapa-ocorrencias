@@ -1,70 +1,34 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
-  <title>Defesa Civil - Rio do Sul</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<title>Defesa Civil - Rio do Sul</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-  <!-- Supabase -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<!-- Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-    }
-
-    .header {
-      background: #2f1a6b;
-      text-align: center;
-      padding: 10px;
-    }
-
-    .header img {
-      max-height: 120px;
-    }
-
-    .titulo {
-      background: #e57200;
-      color: white;
-      text-align: center;
-      padding: 10px;
-      font-weight: bold;
-    }
-
-    #map {
-      height: 60vh;
-    }
-
-    form {
-      padding: 15px;
-      background: white;
-    }
-
-    input, select, textarea, button {
-      width: 100%;
-      margin: 6px 0;
-      padding: 10px;
-      font-size: 14px;
-    }
-
-    button {
-      background: #2f1a6b;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-
-    button:hover {
-      background: #4527a0;
-    }
-  </style>
+<style>
+body { margin:0; font-family: Arial; background:#f5f5f5; }
+.header { background:#2f1a6b; text-align:center; padding:10px; }
+.header img { max-height:120px; }
+.titulo { background:#e57200; color:white; text-align:center; padding:10px; font-weight:bold; }
+#map { height:60vh; }
+form { padding:15px; background:white; }
+input, select, textarea, button {
+  width:100%; margin:6px 0; padding:10px;
+}
+button {
+  background:#2f1a6b; color:white; border:none; cursor:pointer;
+}
+button:hover { background:#4527a0; }
+</style>
 </head>
+
 <body>
 
 <!-- LOGO -->
@@ -87,7 +51,7 @@
     <option>Alagamento</option>
     <option>Deslizamento</option>
     <option>Inundação</option>
-    <option>Produtor Perigosos</option>
+    <option>Produtos Perigosos</option>
     <option>Queda de árvore</option>
     <option>Queda de muro</option>
     <option>Vendaval</option>
@@ -96,119 +60,150 @@
   <label>Descrição:</label>
   <textarea id="descricao" placeholder="Descreva a ocorrência"></textarea>
 
+  <label>Status:</label>
+  <select id="status">
+    <option>Aberto</option>
+    <option>Em atendimento</option>
+    <option>Aguardando Engenharia</option>
+    <option>Atendido</option>
+  </select>
+
   <button type="submit">Registrar Ocorrência</button>
 </form>
 
 <script>
-  // 🔥 CONFIGURE AQUI
-  const SUPABASE_URL = "https://cdnrzjxxbjuqzyrjsfsf.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_RBZteak4ZHZnfGFW5Zehbg_A_njuC_4";
+const SUPABASE_URL = "https://cdnrzjxxbjuqzyrjsfsf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_RBZteak4ZHZnfGFW5Zehbg_A_njuC_4";
 
-  const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // 📍 MAPA
-  const map = L.map('map').setView([-27.21, -49.64], 13);
+// MAPA
+const map = L.map('map').setView([-27.21, -49.64], 13);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap'
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+let marcador;
+let camada;
+
+// CARREGAR OCORRÊNCIAS
+async function carregarOcorrencias() {
+  const { data, error } = await client.rpc('get_ocorrencias_geo');
+
+  if (error) {
+    console.error("Erro ao carregar:", error);
+    return;
+  }
+
+  if (camada) map.removeLayer(camada);
+
+  camada = L.geoJSON(data.map(o => ({
+    type: "Feature",
+    geometry: {
+      type: "Point",
+      coordinates: [o.longitude, o.latitude]
+    },
+    properties: o
+  })), {
+    onEachFeature: (f, l) => {
+      l.bindPopup(`
+        <b>${f.properties.tipo}</b><br>
+        <b>Status:</b> ${f.properties.status}<br>
+        ${f.properties.descricao}<br><br>
+
+        <select onchange="atualizarStatus('${f.properties.id}', this.value)">
+          <option ${f.properties.status === 'Aberto' ? 'selected' : ''}>Aberto</option>
+          <option ${f.properties.status === 'Em atendimento' ? 'selected' : ''}>Em atendimento</option>
+          <option ${f.properties.status === 'Aguardando Engenharia' ? 'selected' : ''}>Aguardando Engenharia</option>
+          <option ${f.properties.status === 'Atendido' ? 'selected' : ''}>Atendido</option>
+        </select>
+
+        <br><br>
+        <button onclick="removerOcorrencia('${f.properties.id}')">
+          ❌ Remover
+        </button>
+      `);
+    }
   }).addTo(map);
+}
 
-  let marcador;
-  let camada;
+// CLIQUE NO MAPA
+map.on('click', function(e) {
+  if (marcador) map.removeLayer(marcador);
 
-  // 🔄 carregar ocorrências
-  async function carregarOcorrencias() {
-    const { data, error } = await client.rpc('get_ocorrencias_geo');
+  marcador = L.marker(e.latlng).addTo(map);
+  window.lat = e.latlng.lat;
+  window.lng = e.latlng.lng;
+});
 
-    if (error) {
-      console.error("Erro ao carregar:", error);
-      return;
-    }
+// ADICIONAR OCORRÊNCIA
+document.getElementById('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
 
-    if (camada) map.removeLayer(camada);
-
-    camada = L.geoJSON(data.map(o => ({
-      type: "Feature",
-      geometry: {
-        type: "Point",
-        coordinates: [o.longitude, o.latitude]
-      },
-      properties: {
-        id: o.id,
-        tipo: o.tipo,
-        descricao: o.descricao
-      }
-    })), {
-      onEachFeature: (f, l) => {
-        l.bindPopup(`
-          <b>${f.properties.tipo}</b><br>
-          ${f.properties.descricao}<br><br>
-          <button onclick="removerOcorrencia('${f.properties.id}')">
-            ❌ Remover
-          </button>
-        `);
-      }
-    }).addTo(map);
+  if (!window.lat) {
+    alert("Clique no mapa para definir o local!");
+    return;
   }
 
-  // 📍 clique no mapa
-  map.on('click', function(e) {
-    if (marcador) map.removeLayer(marcador);
+  const tipo = document.getElementById('tipo').value;
+  const descricao = document.getElementById('descricao').value;
+  const status = document.getElementById('status').value;
 
-    marcador = L.marker(e.latlng).addTo(map);
-    window.lat = e.latlng.lat;
-    window.lng = e.latlng.lng;
-  });
+  const { error } = await client
+    .from('ocorrencias')
+    .insert([{
+      tipo: tipo,
+      descricao: descricao,
+      status: status,
+      geom: `POINT(${window.lng} ${window.lat})`
+    }]);
 
-  // ➕ adicionar ocorrência
-  document.getElementById('form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    if (!window.lat) {
-      alert("Clique no mapa para definir o local!");
-      return;
-    }
-
-    const tipo = document.getElementById('tipo').value;
-    const descricao = document.getElementById('descricao').value;
-
-    const { error } = await client
-      .from('ocorrencias')
-      .insert([{
-        tipo: tipo,
-        descricao: descricao,
-        geom: `POINT(${window.lng} ${window.lat})`
-      }]);
-
-    if (error) {
-      alert("Erro ao salvar!");
-      console.error(error);
-    } else {
-      document.getElementById('descricao').value = "";
-      carregarOcorrencias();
-    }
-  });
-
-  // ❌ remover ocorrência
-  async function removerOcorrencia(id) {
-    if (!confirm("Deseja remover esta ocorrência?")) return;
-
-    const { error } = await client
-      .from('ocorrencias')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      alert("Erro ao remover!");
-    } else {
-      carregarOcorrencias();
-    }
+  if (error) {
+    alert("Erro ao salvar!");
+    console.error(error);
+  } else {
+    document.getElementById('descricao').value = "";
+    carregarOcorrencias();
   }
+});
 
-  // 🔄 auto atualização
-  setInterval(carregarOcorrencias, 5000);
+// REMOVER OCORRÊNCIA
+async function removerOcorrencia(id) {
+  if (!confirm("Deseja remover esta ocorrência?")) return;
 
-  carregarOcorrencias();
+  const { error } = await client
+    .from('ocorrencias')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    alert("Erro ao remover!");
+  } else {
+    carregarOcorrencias();
+  }
+}
+
+// ATUALIZAR STATUS
+async function atualizarStatus(id, novoStatus) {
+  const { error } = await client
+    .from('ocorrencias')
+    .update({ status: novoStatus })
+    .eq('id', id);
+
+  if (error) {
+    alert("Erro ao atualizar status!");
+    console.error(error);
+  } else {
+    carregarOcorrencias();
+  }
+}
+
+// AUTO ATUALIZAÇÃO
+setInterval(carregarOcorrencias, 5000);
+
+// INICIAL
+carregarOcorrencias();
 </script>
 
 </body>
