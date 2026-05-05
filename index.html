@@ -5,11 +5,9 @@
 <title>Defesa Civil - Rio do Sul</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-<!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
 <style>
@@ -26,7 +24,6 @@ button {
   background:#2f1a6b; color:white; border:none; cursor:pointer;
 }
 button:hover { background:#4527a0; }
-
 .loading {
   opacity: 0.6;
   pointer-events: none;
@@ -37,7 +34,7 @@ button:hover { background:#4527a0; }
 <body>
 
 <div class="header">
-  <img src="img/logo.png" alt="Defesa Civil Rio do Sul">
+  <img src="img/logo.png">
 </div>
 
 <div class="titulo">
@@ -59,7 +56,7 @@ button:hover { background:#4527a0; }
   </select>
 
   <label>Descrição:</label>
-  <textarea id="descricao" placeholder="Descreva a ocorrência"></textarea>
+  <textarea id="descricao"></textarea>
 
   <label>Status:</label>
   <select id="status">
@@ -89,7 +86,7 @@ let marcador = null;
 let camada = null;
 let carregando = false;
 
-// 🔴 ÍCONES POR TIPO
+// ÍCONES POR TIPO
 function getIcon(tipo) {
   let cor = "red";
 
@@ -111,7 +108,7 @@ function getIcon(tipo) {
   });
 }
 
-// CARREGAR OCORRÊNCIAS
+// CARREGAR
 async function carregarOcorrencias() {
   if (carregando) return;
   carregando = true;
@@ -163,7 +160,7 @@ async function carregarOcorrencias() {
   carregando = false;
 }
 
-// CLIQUE NO MAPA
+// CLICK MAPA
 map.on('click', function(e) {
   if (marcador) {
     marcador.setLatLng(e.latlng);
@@ -175,12 +172,12 @@ map.on('click', function(e) {
   window.lng = e.latlng.lng;
 });
 
-// ADICIONAR OCORRÊNCIA
+// INSERT (CORRIGIDO COM RPC)
 document.getElementById('form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
   if (!window.lat) {
-    alert("Clique no mapa para definir o local!");
+    alert("Clique no mapa!");
     return;
   }
 
@@ -191,30 +188,29 @@ document.getElementById('form').addEventListener('submit', async (e) => {
   const descricao = document.getElementById('descricao').value;
   const status = document.getElementById('status').value;
 
-  const { error } = await client
-    .from('ocorrencias')
-    .insert([{
-      tipo,
-      descricao,
-      status,
-      geom: `POINT(${window.lng} ${window.lat})`
-    }]);
+  const { error } = await client.rpc('inserir_ocorrencia', {
+    p_tipo: tipo,
+    p_descricao: descricao,
+    p_status: status,
+    p_lat: window.lat,
+    p_lng: window.lng
+  });
 
   form.classList.remove('loading');
 
   if (error) {
-    alert("Erro ao salvar ocorrência!");
-    console.error(error);
+    console.error("ERRO:", error);
+    alert("Erro: " + error.message);
   } else {
     document.getElementById('descricao').value = "";
-    alert("Ocorrência registrada com sucesso!");
+    alert("Ocorrência registrada!");
     carregarOcorrencias();
   }
 });
 
-// REMOVER OCORRÊNCIA
+// DELETE
 async function removerOcorrencia(id) {
-  if (!confirm("Deseja remover esta ocorrência?")) return;
+  if (!confirm("Remover ocorrência?")) return;
 
   const { error } = await client
     .from('ocorrencias')
@@ -228,7 +224,7 @@ async function removerOcorrencia(id) {
   }
 }
 
-// ATUALIZAR STATUS
+// UPDATE
 async function atualizarStatus(id, novoStatus) {
   const { error } = await client
     .from('ocorrencias')
@@ -236,17 +232,13 @@ async function atualizarStatus(id, novoStatus) {
     .eq('id', id);
 
   if (error) {
-    alert("Erro ao atualizar status!");
-    console.error(error);
+    alert("Erro ao atualizar!");
   } else {
     carregarOcorrencias();
   }
 }
 
-// AUTO ATUALIZAÇÃO
 setInterval(carregarOcorrencias, 5000);
-
-// INICIAL
 carregarOcorrencias();
 </script>
 
