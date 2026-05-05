@@ -26,25 +26,26 @@ button {
   background:#2f1a6b; color:white; border:none; cursor:pointer;
 }
 button:hover { background:#4527a0; }
+
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
 </style>
 </head>
 
 <body>
 
-<!-- LOGO -->
 <div class="header">
   <img src="img/logo.png" alt="Defesa Civil Rio do Sul">
 </div>
 
-<!-- TÍTULO -->
 <div class="titulo">
   Sistema de Registro de Ocorrências
 </div>
 
-<!-- MAPA -->
 <div id="map"></div>
 
-<!-- FORM -->
 <form id="form">
   <label>Tipo:</label>
   <select id="tipo">
@@ -84,15 +85,42 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap'
 }).addTo(map);
 
-let marcador;
-let camada;
+let marcador = null;
+let camada = null;
+let carregando = false;
+
+// 🔴 ÍCONES POR TIPO
+function getIcon(tipo) {
+  let cor = "red";
+
+  switch(tipo) {
+    case "Alagamento": cor = "blue"; break;
+    case "Deslizamento": cor = "orange"; break;
+    case "Inundação": cor = "darkblue"; break;
+    case "Produtos Perigosos": cor = "purple"; break;
+    case "Queda de árvore": cor = "green"; break;
+    case "Queda de muro": cor = "gray"; break;
+    case "Vendaval": cor = "yellow"; break;
+  }
+
+  return new L.Icon({
+    iconUrl: `https://maps.google.com/mapfiles/ms/icons/${cor}-dot.png`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -32]
+  });
+}
 
 // CARREGAR OCORRÊNCIAS
 async function carregarOcorrencias() {
+  if (carregando) return;
+  carregando = true;
+
   const { data, error } = await client.rpc('get_ocorrencias_geo');
 
   if (error) {
     console.error("Erro ao carregar:", error);
+    carregando = false;
     return;
   }
 
@@ -106,11 +134,16 @@ async function carregarOcorrencias() {
     },
     properties: o
   })), {
+    pointToLayer: (feature, latlng) => {
+      return L.marker(latlng, {
+        icon: getIcon(feature.properties.tipo)
+      });
+    },
     onEachFeature: (f, l) => {
       l.bindPopup(`
         <b>${f.properties.tipo}</b><br>
         <b>Status:</b> ${f.properties.status}<br>
-        ${f.properties.descricao}<br><br>
+        ${f.properties.descricao || ''}<br><br>
 
         <select onchange="atualizarStatus('${f.properties.id}', this.value)">
           <option ${f.properties.status === 'Aberto' ? 'selected' : ''}>Aberto</option>
@@ -126,13 +159,18 @@ async function carregarOcorrencias() {
       `);
     }
   }).addTo(map);
+
+  carregando = false;
 }
 
 // CLIQUE NO MAPA
 map.on('click', function(e) {
-  if (marcador) map.removeLayer(marcador);
+  if (marcador) {
+    marcador.setLatLng(e.latlng);
+  } else {
+    marcador = L.marker(e.latlng).addTo(map);
+  }
 
-  marcador = L.marker(e.latlng).addTo(map);
   window.lat = e.latlng.lat;
   window.lng = e.latlng.lng;
 });
@@ -146,6 +184,9 @@ document.getElementById('form').addEventListener('submit', async (e) => {
     return;
   }
 
+  const form = document.getElementById('form');
+  form.classList.add('loading');
+
   const tipo = document.getElementById('tipo').value;
   const descricao = document.getElementById('descricao').value;
   const status = document.getElementById('status').value;
@@ -153,17 +194,20 @@ document.getElementById('form').addEventListener('submit', async (e) => {
   const { error } = await client
     .from('ocorrencias')
     .insert([{
-      tipo: tipo,
-      descricao: descricao,
-      status: status,
+      tipo,
+      descricao,
+      status,
       geom: `POINT(${window.lng} ${window.lat})`
     }]);
 
+  form.classList.remove('loading');
+
   if (error) {
-    alert("Erro ao salvar!");
+    alert("Erro ao salvar ocorrência!");
     console.error(error);
   } else {
     document.getElementById('descricao').value = "";
+    alert("Ocorrência registrada com sucesso!");
     carregarOcorrencias();
   }
 });
