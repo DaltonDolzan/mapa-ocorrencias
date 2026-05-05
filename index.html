@@ -7,7 +7,6 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
 <style>
@@ -34,7 +33,7 @@ button:hover { background:#4527a0; }
 <body>
 
 <div class="header">
-  <img src="img/logo.png">
+  <img src="img/logo.png" alt="Defesa Civil">
 </div>
 
 <div class="titulo">
@@ -56,7 +55,7 @@ button:hover { background:#4527a0; }
   </select>
 
   <label>Descrição:</label>
-  <textarea id="descricao"></textarea>
+  <textarea id="descricao" placeholder="Descreva a ocorrência"></textarea>
 
   <label>Status:</label>
   <select id="status">
@@ -86,19 +85,19 @@ let marcador = null;
 let camada = null;
 let carregando = false;
 
-// ÍCONES POR TIPO
-function getIcon(tipo) {
-  let cor = "red";
+// CORES DOS ÍCONES (válidas)
+const cores = {
+  "Alagamento": "blue",
+  "Deslizamento": "orange",
+  "Inundação": "purple",
+  "Produtos Perigosos": "pink",
+  "Queda de árvore": "green",
+  "Queda de muro": "red",
+  "Vendaval": "blue"
+};
 
-  switch(tipo) {
-    case "Alagamento": cor = "blue"; break;
-    case "Deslizamento": cor = "orange"; break;
-    case "Inundação": cor = "darkblue"; break;
-    case "Produtos Perigosos": cor = "purple"; break;
-    case "Queda de árvore": cor = "green"; break;
-    case "Queda de muro": cor = "gray"; break;
-    case "Vendaval": cor = "yellow"; break;
-  }
+function getIcon(tipo) {
+  const cor = cores[tipo] || "red";
 
   return new L.Icon({
     iconUrl: `https://maps.google.com/mapfiles/ms/icons/${cor}-dot.png`,
@@ -108,7 +107,7 @@ function getIcon(tipo) {
   });
 }
 
-// CARREGAR
+// CARREGAR DADOS
 async function carregarOcorrencias() {
   if (carregando) return;
   carregando = true;
@@ -116,7 +115,7 @@ async function carregarOcorrencias() {
   const { data, error } = await client.rpc('get_ocorrencias_geo');
 
   if (error) {
-    console.error("Erro ao carregar:", error);
+    console.error(error);
     carregando = false;
     return;
   }
@@ -150,9 +149,7 @@ async function carregarOcorrencias() {
         </select>
 
         <br><br>
-        <button onclick="removerOcorrencia('${f.properties.id}')">
-          ❌ Remover
-        </button>
+        <button onclick="removerOcorrencia('${f.properties.id}')">❌ Remover</button>
       `);
     }
   }).addTo(map);
@@ -160,7 +157,7 @@ async function carregarOcorrencias() {
   carregando = false;
 }
 
-// CLICK MAPA
+// CLIQUE NO MAPA
 map.on('click', function(e) {
   if (marcador) {
     marcador.setLatLng(e.latlng);
@@ -172,7 +169,7 @@ map.on('click', function(e) {
   window.lng = e.latlng.lng;
 });
 
-// INSERT (CORRIGIDO COM RPC)
+// INSERIR
 document.getElementById('form').addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -199,7 +196,6 @@ document.getElementById('form').addEventListener('submit', async (e) => {
   form.classList.remove('loading');
 
   if (error) {
-    console.error("ERRO:", error);
     alert("Erro: " + error.message);
   } else {
     document.getElementById('descricao').value = "";
@@ -208,7 +204,7 @@ document.getElementById('form').addEventListener('submit', async (e) => {
   }
 });
 
-// DELETE
+// REMOVER
 async function removerOcorrencia(id) {
   if (!confirm("Remover ocorrência?")) return;
 
@@ -224,7 +220,7 @@ async function removerOcorrencia(id) {
   }
 }
 
-// UPDATE
+// ATUALIZAR STATUS
 async function atualizarStatus(id, novoStatus) {
   const { error } = await client
     .from('ocorrencias')
@@ -238,6 +234,7 @@ async function atualizarStatus(id, novoStatus) {
   }
 }
 
+// AUTO REFRESH
 setInterval(carregarOcorrencias, 5000);
 carregarOcorrencias();
 </script>
